@@ -3,10 +3,16 @@ import collections
 import math
 import matrices
 import algebra
+import copy
 
-Boundary = collections.namedtuple('Boundary', ['min_x', 'max_x', 'min_y', 'max_y', 'min_z', 'max_z'])
+Part = collections.namedtuple('Part', ['equ', 'bound'])
+Boundary = collections.namedtuple('Boundary', ['eqns'])  # list of equations, function can't pass
 SetOfPlanes = collections.namedtuple('SetOfPlanes', ['x', 'y'])
 PointsOfEquation = collections.namedtuple('PointsOfEquation', ['expr', 'planes'])
+
+MAGNITUDE_STEP = 1
+REVOLUTION = 2 * math.pi
+ZERO_VECTOR = geometry.Vector(0, 0, 0)
 
 
 class NotAVectorError(Exception):
@@ -17,16 +23,6 @@ class IntersectionsOfPlane:
     def __init__(self, value, intersections):
         self.value = value
         self.intersections = intersections
-
-
-def _check_boundary_error(boundary: Boundary) -> None:
-    try:
-        if boundary.min_x > boundary.max_x or \
-                boundary.min_y > boundary.max_y or \
-                boundary.min_z > boundary.max_z:
-            raise BoundaryError()
-    except TypeError:  # boundary component(s) not int/float
-        raise BoundaryError()
 
 
 def vector_to_matrix(vector):
@@ -40,44 +36,29 @@ def matrix_to_vector(matrix: matrices.Matrix):
         raise NotAVectorError()
 
 
-def _rotate_matrix(theta_xy, theta_yz, theta_xz):
-    xy_rotate = matrices.Matrix([[math.cos(theta_xy), -math.sin(theta_xy), 0],
-                                 [math.sin(theta_xy), math.cos(theta_xy),  0],
-                                 [0,                  0,                   1]])
-
-    yz_rotate = matrices.Matrix([[1, 0, 0],
-                                 [0, math.cos(theta_yz),  math.sin(theta_yz)],
-                                 [0, -math.sin(theta_yz), math.cos(theta_yz)]])
-
-    xz_rotate = matrices.Matrix([[math.cos(theta_xz), 0, -math.sin(theta_xz)],
-                                 [0,                  1, 0],
-                                 [math.sin(theta_xz), 0, math.cos(theta_xz)]])
-
-    return xy_rotate.matrix_multiplication(yz_rotate).matrix_multiplication(xz_rotate)
-
-
 def _matrix_times_a_vector(matrix, vector):
     return matrix_to_vector(matrix.matrix_multiplication(vector_to_matrix(vector)))
+
+
+def sign(num: int or float) -> int:
+    if num == 0:
+        return 0
+    else:
+        return int(num/abs(num))
 
 
 class BoundaryError(Exception):
     pass
 
 
-class EquationError(Exception):
-    pass
-
-
 class Object3D:
-    def __init__(self, equation: algebra.Equation, boundary: Boundary, divisor: int) -> None:  # only takes xyz
-        _check_boundary_error(boundary)
-        self.equation = equation
-        self.planes = self._new_planes(boundary, divisor)
-        self.faces = self._new_faces(self._new_expressions(), boundary)
+    def __init__(self, parts: [Part], divisor: int) -> None:  # only takes xyz
+        self.parts = parts
+        self.faces = self._new_faces(REVOLUTION / divisor)
         self._update_faces()
 
     def rotate(self, theta_xy, theta_yz, theta_xz):
-        rotate = _rotate_matrix(theta_xy, theta_yz, theta_xz)
+        rotate = geometry.rotate_matrix(theta_xy, theta_yz, theta_xz)
         for i, face in enumerate(self.faces):
             corners = []
             for corner in face.corners:
@@ -86,72 +67,108 @@ class Object3D:
             self.faces[i] = geometry.Face(corners)
         self._update_faces()
 
-    def _new_expressions(self):
-        if self.equation.z is not None:
-            expr = self.equation.z
-        elif self.equation.y is not None:
-            expr = self.equation.y
-        elif self.equation.x is not None:
-            expr = self.equation.x
-        else:
-            raise EquationError('need at least one variable to create object')
+    # def _new_planes(self, boundary, divisor) -> [str]:  # ex. 'x=1'
+    #     return
+    #
+    # def _new_faces(self, function: [str], boundary: Boundary) -> [geometry.Face]:
+    #     faces = []
+    #     for function in function:
+    #         for i in range(len(self.planes.y) - 1):
+    #             for j in range(len(self.planes.x) - 1):
+    #                 corners = []
+    #                 for x_plane, y_plane in [(self.planes.x[i],     self.planes.y[j]),
+    #                                          (self.planes.x[i + 1], self.planes.y[j]),
+    #                                          (self.planes.x[i + 1], self.planes.y[j + 1]),
+    #                                          (self.planes.x[i],     self.planes.y[j + 1])]:
+    #                     try:
+    #                         x, y, z = self._calc_coordinates(x_plane, y_plane, function, boundary)
+    #                         corners += [geometry.Vector(x, y, z)]
+    #                     except ValueError:  # point not on graph, add z = 0 plane
+    #                         pass
+    #                         # x, y, z = self._calc_coordinates(x_plane, z_plane, '0', boundary)
+    #                         # corners += [geometry.Vector(x, y, z)]
+    #                     except:  # something else wrong, likely incorrect syntax or data type in exec arg
+    #                         raise algebra.EquationError()
+    #                 if len(corners) >= 3:
+    #                     faces += [geometry.Face(corners)]  # could add center here using equation
+    #     return faces
 
-        expressions = [expr]
-        pow_idx = expr.find('math.pow')
-
-        if pow_idx > -1:
-            pow_args = algebra.paren_args(expr, pow_idx + len('math.pow'))[0]
-            pow_arg2 = pow_args[pow_args.index(',') + 1:]
-            if eval(f'{pow_arg2}**-1 % 2 == 0'):
-                expressions += [expr.replace('math.pow', '-math.pow')]  # assuming only 1 pow & came from solving
-
-        return expressions
-
-    def _new_planes(self, boundary, divisor) -> [str]:  # ex. 'x=1'
-        x_length = boundary.max_x - boundary.min_x
-        y_length = boundary.max_y - boundary.min_y
-
-        x_planes = []
-        y_planes = []
-        for i in range(divisor + 1):
-            x = boundary.min_x + i * x_length / divisor
-            y = boundary.min_y + i * y_length / divisor
-
-            x_planes += [IntersectionsOfPlane(x, [])]
-            y_planes += [IntersectionsOfPlane(y, [])]
-
-        return SetOfPlanes(x_planes, y_planes)
-
-    def _new_faces(self, z_expressions: [str], boundary: Boundary) -> [geometry.Face]:
+    def _new_faces(self, angle_step) -> [geometry.Face]:
+        # be warned, this algorithm will be inaccurate b/c adding to desired values
         faces = []
-        for expression in z_expressions:
-            for i in range(len(self.planes.x) - 1):
-                for j in range(len(self.planes.y) - 1):
+        point = geometry.Vector(1, 1, 1).unit_vector()
+
+        rotate_xy = geometry.rotate_matrix(angle_step, 0, 0)
+        rotate_yz = geometry.rotate_matrix(0, angle_step, 0)
+
+        for part in self.parts:
+            theta_xy = theta_yz = 0
+            while theta_xy < math.pi:
+                while theta_yz < 2 * math.pi:
                     corners = []
-                    for x_plane, y_plane in [(self.planes.x[i],     self.planes.y[j]),
-                                             (self.planes.x[i + 1], self.planes.y[j]),
-                                             (self.planes.x[i + 1], self.planes.y[j + 1]),
-                                             (self.planes.x[i],     self.planes.y[j + 1])]:
-                        try:
-                            x, y, z = self._calc_coordinates(x_plane, y_plane, expression, boundary)
-                            corners += [geometry.Vector(x, y, z)]
-                        except ValueError:  # point not on sphere, add None as a place holder
-                            x, y, z = self._calc_coordinates(x_plane, y_plane, '0', boundary)
-                            corners += [geometry.Vector(x, y, z)]
-                        except:  # something else wrong, likely incorrect syntax or data type in exec arg
-                            raise EquationError()
+                    for xy_coef, yz_coef in [(0, 0), (1, 0), (1, 1), (0, 1)]:
+                        corner = copy.deepcopy(point)
+
+                        corner_rotate_xy = geometry.rotate_matrix(xy_coef * angle_step, 0, 0)
+                        corner_rotate_yz = geometry.rotate_matrix(0, yz_coef * angle_step, 0)
+
+                        corner = _matrix_times_a_vector(corner_rotate_xy, corner)
+                        corner = _matrix_times_a_vector(corner_rotate_yz, corner)
+
+                        orig_func_signs, orig_bound_signs = self.get_signs(part, corner)
+
+                        while True:
+                            corner = corner.plus(corner.unit_vector().times(MAGNITUDE_STEP))
+                            # assuming no folds, spirals, etc from a single function
+                            try:
+                                func_signs, bound_signs = self.get_signs(part, corner)
+                                if bound_signs != orig_bound_signs:
+                                    # won't add points at bound for given func
+                                    break  # don't add points past here
+                                if func_signs != orig_func_signs:
+                                    corners += [corner]
+                                    break  # don't add points past here
+                            except ValueError:  # not on graph, but further points may be, up until boundary
+                                continue
+
                     if len(corners) >= 3:
-                        faces += [geometry.Face(corners)]  # could add center here using equation
+                        faces += [geometry.Face(corners)]
+
+                    point = _matrix_times_a_vector(rotate_yz, point)
+                    theta_yz += angle_step
+
+                point = _matrix_times_a_vector(rotate_xy, point)
+                theta_xy += angle_step
+
         return faces
 
-    def _calc_coordinates(self, x_plane, y_plane, expression, boundary):
-        x, y = x_plane.value, y_plane.value
-        z = eval(expression)
+    def get_signs(self, part: Part, corner: geometry.Vector) -> ([int], [int]):
+        func_signs = []
+        bound_signs = []
+        x, y, z = corner.x, corner.y, corner.z
 
-        if z <= boundary.min_z:
-            z = boundary.min_z
-        elif boundary.max_z <= z:
-            z = boundary.max_z
+        for obj_func in part.equ.funcs:
+            try:
+                func_signs += [sign(eval(f'corner.{part.equ.var_out} - ({obj_func})'))]
+            except ValueError:
+                # None is place holder for invalid, hopefully also changes when passing (all?) surfaces
+                func_signs += [None]
+
+        for bound_equ in part.bound.eqns:
+            for bound_func in bound_equ.funcs:
+                try:
+                    bound_signs += [sign(eval(f'corner.{bound_equ.var_out} - ({bound_func})'))]
+                except ValueError:
+                    bound_signs += [None]
+
+        return func_signs, bound_signs
+
+    def _calc_coordinates(self, x_plane, y_plane, function, boundary):
+        x, y = x_plane.value, y_plane.value
+        z = eval(function)
+
+        if z <= boundary.min_z or boundary.max_z <= z:
+            raise ValueError
 
         return x, y, z
 

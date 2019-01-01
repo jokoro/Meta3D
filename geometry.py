@@ -1,5 +1,6 @@
 import math
 import collections
+import matrices
 
 
 class InvalidCalcError(Exception):
@@ -16,7 +17,6 @@ class ZeroVectorError(Exception):
 
 Point2 = collections.namedtuple('Point2', ['x', 'y'])
 Point3 = collections.namedtuple('Point3', ['x', 'y', 'z'])
-# Vector = collections.namedtuple('Vector', ['x', 'y', 'z'])  # only in R^3
 
 
 def duplicate_points(points: [Point3]) -> bool:
@@ -28,6 +28,22 @@ def duplicate_points(points: [Point3]) -> bool:
             return duplicate_points(points[1:])
     else:
         return False
+
+
+def rotate_matrix(theta_xy, theta_yz, theta_xz):
+    xy_rotate = matrices.Matrix([[math.cos(theta_xy), -math.sin(theta_xy), 0],
+                                 [math.sin(theta_xy), math.cos(theta_xy),  0],
+                                 [0,                  0,                   1]])
+
+    yz_rotate = matrices.Matrix([[1, 0, 0],
+                                 [0, math.cos(theta_yz),  math.sin(theta_yz)],
+                                 [0, -math.sin(theta_yz), math.cos(theta_yz)]])
+
+    xz_rotate = matrices.Matrix([[math.cos(theta_xz), 0, -math.sin(theta_xz)],
+                                 [0,                  1, 0],
+                                 [math.sin(theta_xz), 0, math.cos(theta_xz)]])
+
+    return xy_rotate.matrix_multiplication(yz_rotate).matrix_multiplication(xz_rotate)
 
 
 class Vector:
@@ -74,6 +90,9 @@ class Vector:
     def angle_between_vectors(self, v: 'Vector') -> float:
         """ Angle between two vectors """
         return math.acos(self.dot_product(v) / self.magnitude() / v.magnitude())
+
+    def projected_onto(self, v: 'Vector'):
+        return v.times(self.dot_product(v) / v.dot_product(v))
 
 
 class Plane:

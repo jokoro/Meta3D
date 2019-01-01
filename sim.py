@@ -1,8 +1,8 @@
 import pygame
-import object3d
-import geometry
 import math
 import collections
+import object3d
+import geometry
 import algebra
 
 SubFace = collections.namedtuple('SubFace', ['face', 'o', 'p'])
@@ -34,48 +34,52 @@ CHANGE_DIST = 50
 COLORING = True
 SHADING = False
 
-ROTATE_STEP = PI / 15
+ROTATE_STEP = PI / 16
 LIGHT_VECTOR = geometry.Vector(0, 0, 1)
 
 DIVISOR = 20
-BOUND = 200
-RADIUS = BOUND
+BOUND = 500
+RADIUS = 200
 SCALE = 100
-Z_EXPRESSIONS = \
-    algebra.Equation(f'x^4+y^4+1*z^4={RADIUS}^4')
+EQUATION = \
+    algebra.Equation(f'x^2+z^2={SCALE}*y')
 
 # algebra.Equation(f'x^2-y^2+z^2={SCALE}')
 # [f'math.sqrt({SCALE} - x ** 2 + y ** 2)',
 # f'-math.sqrt({SCALE} - x ** 2 + y ** 2)']
-# SCALE > 0: 1 sheet hyperboloid (finger trap)
-# SCALE = 0: cone(s)
-# SCALE < 0: 2 sheet hyperboloid (2 bowls)
+# SCALE > 0:                                      1 sheet hyperboloid (finger trap)
+# SCALE = 0:                                      cone(s)
+# SCALE < 0:                                      2 sheet hyperboloid (2 bowls)
 # scale and/or divisor need to be big for this one
 #
 # algebra.Equation(f'x^2-y^2={SCALE}*z')
 # [f'math.sqrt(x ** 2 + {SCALE}*y)',
 # f'-math.sqrt(x ** 2 + {SCALE}*y)']
-# hyperbolic paraboloid (saddle)
+#                                                  hyperbolic paraboloid (saddle)
+#
 # this way it maps points that wouldn't
 # otherwise be on graph onto the graph
+# (make it bigger than bound)
 #
 # algebra.Equation(f'x^2+z^2={SCALE}*y')
 # [f'math.sqrt({SCALE}*y - x ** 2)',
 # f'-math.sqrt({SCALE}*y - x ** 2)']
-# elliptic paraboloid (bowl)
+#                                                   elliptic paraboloid (bowl)
 #
 # algebra.Equation(f'x^2+y^2+z^2={SCALE}')
 # [f'math.sqrt({RADIUS} ** 2 - x ** 2 - y ** 2)',
 # f'-math.sqrt({RADIUS} ** 2 - x ** 2 - y ** 2)']
-# sphere/ellipsoid (potato)
-BOUNDARY = object3d.Boundary(-BOUND, BOUND, -BOUND, BOUND, -BOUND, BOUND)
+#                                                   sphere/ellipsoid (potato)
+BOUNDARY = object3d.Boundary([algebra.Equation(f'x={-BOUND}'), algebra.Equation(f'x={BOUND}'),
+                              algebra.Equation(f'y={-BOUND}'), algebra.Equation(f'y={BOUND}'),
+                              algebra.Equation(f'z={-BOUND}'), algebra.Equation(f'z={BOUND}')])
 FRAME_RATE = 30
 
 
 class Simulation3D:
     def __init__(self):
         self._running = True
-        self._object = object3d.Object3D(Z_EXPRESSIONS, BOUNDARY, DIVISOR)
+        self._object = object3d.Object3D([object3d.Part(EQUATION, BOUNDARY)], DIVISOR)
         self._clock = pygame.time.Clock()
         self._angle = 0
         self._this_rel = (0, 0)

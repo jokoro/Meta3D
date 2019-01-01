@@ -5,6 +5,10 @@ Op = collections.namedtuple('Op', ['left', 'op', 'right'])
 OPS = (('+', '-'), ('*', '/'), '^')
 
 
+class EquationError(Exception):
+    pass
+
+
 def paren_args(expr: str, i: int) -> (str, int):  # consider replacing '()' with ' ' and splitting to find next time
     """ Returns contents of parentheses starting at expr[i] if '(' is at expr[i], else ''. """
     if expr[i] == '(':
@@ -92,11 +96,11 @@ def _parse_expr(expr: str) -> Op:
     return op_vals[0]
 
 
-def _unparse_expr(parsed_expr: str or Op) -> str:
+def _unparse(parsed_expr: str or Op) -> str:
     """ Unparses an expression that was parsed using parse_expr() back to a str. """
     if type(parsed_expr) == str:
         return parsed_expr
-    return f'({_unparse_expr(parsed_expr.left)}{parsed_expr.op}{_unparse_expr(parsed_expr.right)})'
+    return f'({_unparse(parsed_expr.left)}{parsed_expr.op}{_unparse(parsed_expr.right)})'
 
 
 def _solving(solution: str, parsed_var_side: str or Op, var: str):
@@ -104,42 +108,42 @@ def _solving(solution: str, parsed_var_side: str or Op, var: str):
     Uses parsed expression (parsed_var_side) and string
     expression (solution) to find the solution to var recursively.
     """
-    if type(parsed_var_side) == str:  # or maybe, parsed_var_side == var, both may be wrong if using this recursively
+    if type(parsed_var_side) == str:  # or, parsed_var_side == var
         return solution
     else:
-        if var in _unparse_expr(parsed_var_side.left):  # '+', '-', '*', '/', '^'
+        if var in _unparse(parsed_var_side.left):  # '+', '-', '*', '/', '^'
             if parsed_var_side.op == '+':
-                solution += f'-{_unparse_expr(parsed_var_side.right)}'
+                solution += f'-{_unparse(parsed_var_side.right)}'
 
             elif parsed_var_side.op == '-':
-                solution += f'+{_unparse_expr(parsed_var_side.right)}'
+                solution += f'+{_unparse(parsed_var_side.right)}'
 
             elif parsed_var_side.op == '*':
-                solution = f'({solution})/{_unparse_expr(parsed_var_side.right)}'
+                solution = f'({solution})/{_unparse(parsed_var_side.right)}'
 
-            elif parsed_var_side.op == '/':  # consider adding a division by 0 error
-                solution = f'({solution})*{_unparse_expr(parsed_var_side.right)}'
+            elif parsed_var_side.op == '/':  # consider adding my own division by 0 error?
+                solution = f'({solution})*{_unparse(parsed_var_side.right)}'
 
             else:  # if parsed_var_side.op == '^':
-                solution = f'math.pow(({solution}), (1/{_unparse_expr(parsed_var_side.right)}))'
+                solution = f'(?math.pow(({solution}), (1/{_unparse(parsed_var_side.right)})))'
 
             return _solving(solution, parsed_var_side.left, var)
 
         else:  # if parsed_var_side.right.has_var:
             if parsed_var_side.op == '+':
-                solution += f'-{_unparse_expr(parsed_var_side.left)}'
+                solution += f'-{_unparse(parsed_var_side.left)}'
 
             elif parsed_var_side.op == '-':
-                solution = f'-({solution}-{_unparse_expr(parsed_var_side.left)})'
+                solution = f'-({solution}-{_unparse(parsed_var_side.left)})'
 
             elif parsed_var_side.op == '*':
-                solution = f'({solution})/{_unparse_expr(parsed_var_side.left)}'
+                solution = f'({solution})/{_unparse(parsed_var_side.left)}'
 
             elif parsed_var_side.op == '/':  # consider adding a division by 0 error
-                solution = f'{_unparse_expr(parsed_var_side.left)}/({solution})'
+                solution = f'{_unparse(parsed_var_side.left)}/({solution})'
 
             else:  # if parsed_var_side.op == '^':
-                solution = f'math.log({solution}, {_unparse_expr(parsed_var_side.left)})'
+                solution = f'math.log({solution}, {_unparse(parsed_var_side.left)})'
 
             return _solving(solution, parsed_var_side.right, var)
 
@@ -163,34 +167,75 @@ def solve_for(equation: str, var: str) -> str or None:
         solution = sides_of_equation[0]
 
     parsed_var_side = _parse_expr(var_side)
-
     solution = _solving(solution, parsed_var_side, var)
-    return solution.replace('^', '**')
+
+    return plus_or_minus(solution.replace('^', '**'))
+
+
+def plus_or_minus(expr: str) -> [str]:
+    if '?' in expr:
+        char_idx = expr.find('?')
+        plus_side = expr[:char_idx + 1].replace('?', '')
+        minus_side = expr[:char_idx + 1].replace('?', '-')
+
+        if '?' in expr[char_idx + 1:]:
+            list_of_exprs = []
+            for rest_of_expr in plus_or_minus(expr[char_idx + 1:]):
+                list_of_exprs += [plus_side + rest_of_expr, minus_side + rest_of_expr]
+            return list_of_exprs
+        else:
+            rest_of_expr = expr[char_idx + 1:]
+            return [plus_side + rest_of_expr, minus_side + rest_of_expr]
+    else:
+        return [expr]
 
 
 class Equation:
     def __init__(self, equation: str) -> None:
-        self.equ = equation
+        self.var_out, self.vars_in = self.find_vars(equation)
+        self.funcs = solve_for(equation, self.var_out)  # list of strings
 
-        self.x = solve_for(equation, 'x')  # equation in terms of x
-        self.y = solve_for(equation, 'y')  # equation in terms of y
-        self.z = solve_for(equation, 'z')  # equation in terms of z
+    def find_vars(self, equation: str):
+        """ Returns a variable in equation that I'd prefer to have equation in terms of. """
+        vars_in = []
+        if 'z' in equation:
+            vars_in += ['z']
+        if 'y' in equation:
+            vars_in += ['y']
+        if 'x' in equation:
+            vars_in += ['x']
 
-        self.xy = solve_for(equation.replace('z', '0'), 'y')  # equation for intersection with xy plane in terms of y
-        self.xz = solve_for(equation.replace('y', '0'), 'z')  # equation for intersection with xz plane in terms of z
-        self.yz = solve_for(equation.replace('x', '0'), 'y')  # equation for intersection with yz plane in terms of y
+        if 'z' in vars_in:
+            var_out = vars_in.pop(vars_in.index('z'))
+        elif 'y' in vars_in:
+            var_out = vars_in.pop(vars_in.index('y'))
+        elif 'x' in vars_in:
+            var_out = vars_in.pop(vars_in.index('x'))
+        else:  # might get rid of else's
+            raise EquationError('Need at least one var, none given.')
 
-    def xy_intercept(self, z: str):
+        return var_out, vars_in
+
+    def xy_intercept(self, z_in: str, var_out: str):
         """ Less-than-3D equation of self.equ where z variable, if present, is set to z param. """
-        return solve_for(self.equ.replace('z', f'({z})'), 'y')
+        new_equ = solve_for(self.funcs.replace('z', f'({z_in})'), var_out)
+        if new_equ is not None:
+            return new_equ
+        raise EquationError()
 
-    def xz_intercept(self, y: str):
+    def xz_intercept(self, y_in: str, var_out: str):
         """ Less-than-3D equation of self.equ where y variable, if present, is set to z param. """
-        return solve_for(self.equ.replace('y', f'({y})'), 'z')
+        new_equ = solve_for(self.funcs.replace('y', f'({y_in})'), var_out)
+        if new_equ is not None:
+            return new_equ
+        raise EquationError()
 
-    def yz_intercept(self, x: str):
+    def yz_intercept(self, x_in: str, var_out: str):
         """ Less-than-3D equation of self.equ where z variable, if present, is set to z param. """
-        return solve_for(self.equ.replace('x', f'({x})'), 'y')
+        new_equ = solve_for(self.funcs.replace('x', f'({x_in})'), var_out)
+        if new_equ is not None:
+            return new_equ
+        raise EquationError()
 
 
 # for testing purposes

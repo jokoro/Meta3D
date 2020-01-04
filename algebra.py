@@ -180,6 +180,18 @@ class Equation:
         self.xz = solve_for(equation.replace('y', '0'), 'z')  # equation for intersection with xz plane in terms of z
         self.yz = solve_for(equation.replace('x', '0'), 'y')  # equation for intersection with yz plane in terms of y
 
+    def xy_intercept(self, z: str):
+        """ Less-than-3D equation of self.equ where z variable, if present, is set to z param. """
+        return solve_for(self.equ.replace('z', f'({z})'), 'y')
+
+    def xz_intercept(self, y: str):
+        """ Less-than-3D equation of self.equ where y variable, if present, is set to z param. """
+        return solve_for(self.equ.replace('y', f'({y})'), 'z')
+
+    def yz_intercept(self, x: str):
+        """ Less-than-3D equation of self.equ where z variable, if present, is set to z param. """
+        return solve_for(self.equ.replace('x', f'({x})'), 'y')
+
 
 # for testing purposes
 if __name__ == '__main__':

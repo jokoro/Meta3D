@@ -40,9 +40,9 @@ LIGHT_VECTOR = geometry.Vector(0, 0, 1)
 DIVISOR = 20
 BOUND = 200
 RADIUS = BOUND
-SCALE = 400
+SCALE = 40
 Z_EXPRESSIONS = \
-algebra.Equation(f'x^2-y^2={SCALE}*z')
+algebra.Equation(f'x^2+z^2={SCALE}*y')
 
 # algebra.Equation(f'x^2-y^2+z^2={SCALE}')
 # [f'math.sqrt({SCALE} - x ** 2 + y ** 2)',
@@ -59,6 +59,7 @@ algebra.Equation(f'x^2-y^2={SCALE}*z')
 # this way it maps points that wouldn't
 # otherwise be on graph onto the graph
 #
+# algebra.Equation(f'x^2+z^2={SCALE}*y')
 # [f'math.sqrt({SCALE}*y - x ** 2)',
 # f'-math.sqrt({SCALE}*y - x ** 2)']
 # elliptic paraboloid (bowl)

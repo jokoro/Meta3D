@@ -42,7 +42,7 @@ BOUND = 200
 RADIUS = BOUND
 SCALE = 100
 Z_EXPRESSIONS = \
-    algebra.Equation(f'x^3+y^3+1*z^3={RADIUS}^2')
+    algebra.Equation(f'x^4+y^4+1*z^4={RADIUS}^4')
 
 # algebra.Equation(f'x^2-y^2+z^2={SCALE}')
 # [f'math.sqrt({SCALE} - x ** 2 + y ** 2)',

@@ -35,7 +35,7 @@ def rotate_matrix(theta_xy, theta_yz, theta_xz):
                                  [math.sin(theta_xy), math.cos(theta_xy),  0],
                                  [0,                  0,                   1]])
 
-    yz_rotate = matrices.Matrix([[1, 0, 0],
+    yz_rotate = matrices.Matrix([[1, 0,                   0],
                                  [0, math.cos(theta_yz),  math.sin(theta_yz)],
                                  [0, -math.sin(theta_yz), math.cos(theta_yz)]])
 
@@ -89,7 +89,7 @@ class Vector:
 
     def angle_between_vectors(self, v: 'Vector') -> float:
         """ Angle between two vectors """
-        return math.acos(self.dot_product(v) / self.magnitude() / v.magnitude())
+        return math.acos(self.dot_product(v) / self.magnitude / v.magnitude)
 
     def projected_onto(self, v: 'Vector'):
         return v.times(self.dot_product(v) / v.dot_product(v))
@@ -102,15 +102,11 @@ class Plane:
         self.normal_vector = self.new_normal_vector(points)
         # self.point = self.new_point(points[0])
 
-    def new_normal_vector(self, points: [Point3, Point3, Point3]) -> Vector:
+    def new_normal_vector(self, points: [Vector]) -> Vector:
         """ Calculates the plane's perpendicular, or normal, vector """
-        p1 = points[0]
-        p2 = points[1]
-        p3 = points[2]
-
-        v1 = Vector(p1.x, p1.y, p1.z)
-        v2 = Vector(p2.x, p2.y, p2.z)
-        v3 = Vector(p3.x, p3.y, p3.z)
+        v1 = points[0]
+        v2 = points[1]
+        v3 = points[2]
 
         return v1.minus(v2).cross_product(v3.minus(v2)).unit_vector()
 
